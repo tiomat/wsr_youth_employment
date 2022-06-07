@@ -1,11 +1,17 @@
 version: "3"
 services:
-  backend:
+  service-auth:
     build:
       context: ./service-auth
       dockerfile: Dockerfile
     ports:
       - "4000:4000"
+  service-application:
+    build:
+      context: ./service-application
+      dockerfile: Dockerfile
+    ports:
+      - "4001:4000"
   krakend_ce:
     image: devopsfaith/krakend:2.0.4
     volumes:
@@ -16,4 +22,5 @@ services:
       - "8090:8090"
     command: [ "run", "-d", "-c", "/etc/krakend/krakend.json" ]
     depends_on:
-      - backend
+      - service-auth
+      - service-application
