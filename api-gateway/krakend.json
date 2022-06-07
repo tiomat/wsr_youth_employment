@@ -1,0 +1,338 @@
+{
+  "$schema": "https://www.krakend.io/schema/v3.json",
+  "extra_config": {
+    "telemetry/logging": {
+      "level": "DEBUG",
+      "prefix": "[KRAKEND]",
+      "syslog": false,
+      "stdout": true
+    },
+    "telemetry/metrics": {
+      "collection_time": "60s",
+      "proxy_disabled": false,
+      "router_disabled": false,
+      "backend_disabled": false,
+      "endpoint_disabled": false,
+      "listen_address": ":8090"
+    },
+    "security/cors": {
+      "allow_origins": [
+        "*"
+      ]
+    }
+  },
+  "version": 3,
+  "name": "KrakenD - API Gateway",
+  "timeout": "3000ms",
+  "cache_ttl": "300s",
+  "output_encoding": "json",
+  "endpoints": [
+
+    {
+      "__COMMENT": "РЕГИСТРАЦИЯ ПОЛЬЗОВАТЕЛЕЙ",
+      "endpoint": "/signup",
+      "method": "POST",
+      "backend": [{
+        "host": ["http://host.docker.internal:4000"],
+        "url_pattern": "/signup"
+      }]
+    },
+
+    {
+      "__COMMENT": "АВТОРИЗАЦИЯ ПОЛЬЗОВАТЕЛЕЙ",
+      "endpoint": "/login",
+      "method": "POST",
+      "backend": [{
+        "host": ["http://host.docker.internal:4000"],
+        "url_pattern": "/login"
+      }],
+      "extra_config": {
+        "auth/signer": {
+          "alg": "RS256",
+          "kid": "2011-04-29",
+          "keys_to_sign": ["access_token"],
+          "jwk_url": "http://host.docker.internal:4000/jwt",
+          "disable_jwk_security": true
+        }
+      }
+    },
+
+    {
+      "endpoint": "/users",
+      "method": "GET",
+      "output_encoding": "json",
+      "backend": [{
+        "host": ["http://host.docker.internal:4000/"],
+        "url_pattern": "users",
+        "encoding": "json",
+        "sd": "static",
+        "method": "GET"
+      }],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://host.docker.internal:4000/jwtpub",
+          "roles_key": "role",
+          "roles": ["federal_operator"],
+          "disable_jwk_security": true,
+          "operation_debug": true,
+          "cache": false,
+          "key_identify_strategy": "kid"
+        }
+      }
+    },
+
+    {
+      "__COMMENT": "ПОЛУЧЕНИЕ ЗАЯВКИ ПОЛЬЗОВАТЕЛЕМ",
+      "endpoint": "/application",
+      "method": "GET",
+      "output_encoding": "json",
+      "backend": [{
+        "host": ["http://host.docker.internal:4000/"],
+        "url_pattern": "application?user_id={JWT.id}",
+        "encoding": "json",
+        "sd": "static",
+        "method": "GET"
+      }],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://host.docker.internal:4000/jwtpub",
+          "roles_key": "role",
+          "roles": ["user"],
+          "disable_jwk_security": true,
+          "operation_debug": true,
+          "cache": false,
+          "key_identify_strategy": "kid"
+        }
+      }
+    },
+
+    {
+      "__COMMENT": "СОЗДАНИЕ ЗАЯВКИ ПОЛЬЗОВАТЕЛЕМ",
+      "endpoint": "/application",
+      "method": "POST",
+      "output_encoding": "json",
+      "backend": [{
+        "host": ["http://host.docker.internal:4000/"],
+        "url_pattern": "application?user_id={JWT.id}",
+        "encoding": "json",
+        "sd": "static",
+        "method": "POST"
+      }],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://host.docker.internal:4000/jwtpub",
+          "roles_key": "role",
+          "roles": ["user"],
+          "disable_jwk_security": true,
+          "operation_debug": true,
+          "cache": false,
+          "key_identify_strategy": "kid"
+        }
+      }
+    },
+
+
+    {
+      "__COMMENT": "ПОЛУЧЕНИЕ ИНФОРМАЦИИ О ЗАЯВКИ ФЕДЕРАЛЬНЫМ ОПЕРАТОРОМ",
+      "endpoint": "/approve/{application_id}",
+      "input_query_strings": [
+        "action"
+      ],
+      "method": "GET",
+      "output_encoding": "json",
+      "backend": [{
+        "host": ["http://host.docker.internal:4000/"],
+        "url_pattern": "approve/{application_id}?user_id={JWT.id}",
+        "encoding": "json",
+        "sd": "static",
+        "method": "GET"
+      }],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://host.docker.internal:4000/jwtpub",
+          "roles_key": "role",
+          "roles": ["federal_operator"],
+          "disable_jwk_security": true,
+          "operation_debug": true,
+          "cache": false,
+          "key_identify_strategy": "kid"
+        }
+      }
+    },
+
+    {
+      "__COMMENT": "ОДОБРЕНИЕ ЗАЯВКИ ФЕДЕРАЛЬНЫМ ОПЕРАТОРОМ",
+      "endpoint": "/approve/{application_id}",
+      "input_query_strings": [
+        "action"
+      ],
+      "method": "POST",
+      "output_encoding": "json",
+      "backend": [{
+        "host": ["http://host.docker.internal:4000/"],
+        "url_pattern": "approve/{application_id}?user_id={JWT.id}",
+        "encoding": "json",
+        "sd": "static",
+        "method": "POST"
+      }],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://host.docker.internal:4000/jwtpub",
+          "roles_key": "role",
+          "roles": ["federal_operator"],
+          "disable_jwk_security": true,
+          "operation_debug": true,
+          "cache": false,
+          "key_identify_strategy": "kid"
+        }
+      }
+    },
+
+    {
+      "__COMMENT": "ПОЛУЧЕНИЕ СТАТУСА ПО ЗАЯВКЕ СЛУШАТЕЛЯ",
+      "endpoint": "/sys/application",
+      "input_query_strings": [
+        "action"
+      ],
+      "method": "GET",
+      "output_encoding": "json",
+      "backend": [{
+        "host": ["http://host.docker.internal:4000/"],
+        "url_pattern": "/sys/application?user_id={JWT.id}",
+        "encoding": "json",
+        "sd": "static",
+        "method": "GET"
+      }],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://host.docker.internal:4000/jwtpub",
+          "roles_key": "role",
+          "roles": ["user"],
+          "disable_jwk_security": true,
+          "operation_debug": true,
+          "cache": false,
+          "key_identify_strategy": "kid"
+        }
+      }
+    },
+
+
+    {
+      "__COMMENT": "ПОЛУЧЕНИЕ ПОЛЬЗОВАТЕЛЕМ ССЫЛКИ НА ДИАГНОСТИКУ, ЕСЛИ ПОДТВЕРЖДЕНА ЗАЯВКА",
+      "endpoint": "/diagnostic/",
+      "input_query_strings": [
+        "action"
+      ],
+      "method": "GET",
+      "output_encoding": "json",
+      "backend": [
+
+        {
+          "host": ["http://host.docker.internal:4000/"],
+          "url_pattern": "/sys/application?user_id={JWT.id}",
+          "encoding": "json",
+          "sd": "static",
+          "method": "GET",
+          "extra_config": {
+            "validation/cel": [{
+              "check_expr": "'application' in resp_data && resp_data.application == true" 
+            }]
+          }
+
+        },
+        {
+          "host": ["http://host.docker.internal:4000/"],
+          "url_pattern": "diagnostic?user_id={JWT.id}",
+          "encoding": "json",
+          "sd": "static",
+          "method": "GET"
+        }
+      ],
+      "extra_config": {
+
+        "proxy": {
+          "sequential": true
+        },
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://host.docker.internal:4000/jwtpub",
+          "roles_key": "role",
+          "roles": ["user"],
+          "disable_jwk_security": true,
+          "operation_debug": true,
+          "cache": false,
+          "key_identify_strategy": "kid"
+        }
+      }
+    },
+
+
+
+    {
+      "endpoint": "/v1/todo/{id}",
+      "method": "GET",
+      "output_encoding": "json",
+      "backend": [{
+        "host": ["https://jsonplaceholder.typicode.com/"],
+        "url_pattern": "todos/{id}",
+        "encoding": "json",
+        "sd": "static",
+        "method": "GET"
+      }],
+      "extra_config": {
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://host.docker.internal:4000/jwtpub",
+          "roles_key": "roles",
+          "roles": ["user"],
+          "disable_jwk_security": true,
+          "operation_debug": true,
+          "cache": false,
+          "key_identify_strategy": "kid"
+        }
+      }
+    },
+
+    {
+      "endpoint": "/v1/all/{id}",
+      "method": "GET",
+      "output_encoding": "json",
+      "backend": [{
+          "host": ["http://host.docker.internal:4000/"],
+          "url_pattern": "check/{id}",
+          "encoding": "json",
+          "sd": "static",
+          "method": "GET"
+        },
+        {
+          "host": ["http://host.docker.internal:4000/"],
+          "url_pattern": "business/{id}?business_check={resp0_status}",
+          "encoding": "json",
+          "sd": "static",
+          "method": "GET"
+        }
+      ],
+      "extra_config": {
+        "proxy": {
+          "sequential": true
+        },
+        "auth/validator": {
+          "alg": "RS256",
+          "jwk_url": "http://host.docker.internal:4000/jwtpub",
+          "roles_key": "roles",
+          "roles": ["user"],
+          "disable_jwk_security": true,
+          "operation_debug": true,
+          "cache": false,
+          "key_identify_strategy": "kid"
+        }
+      }
+    }
+  ]
+}
