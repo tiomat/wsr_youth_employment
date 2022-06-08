@@ -49,6 +49,7 @@
       "extra_config": {
         "auth/signer": {
           "alg": "RS256",
+          "kid": "auth",
           "keys_to_sign": ["access_token"],
           "jwk_url": "http://host.docker.internal:4000/jwt",
           "disable_jwk_security": true

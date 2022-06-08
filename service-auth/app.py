@@ -1,13 +1,21 @@
 from flask import Flask, request, jsonify, make_response
+from flask_marshmallow import Marshmallow
+from flask_restful import Resource, Api
 from flask_sqlalchemy import SQLAlchemy
-import uuid
-# from sqlalchemy import ForeignKey, false, null, true  # for public id
+from sqlalchemy import ForeignKey
+from sqlalchemy.orm import declarative_base, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 from jwcrypto import jwk
 
+import uuid
+
 # creates Flask object
 app = Flask(__name__)
+# add Marshmallow
+ma = Marshmallow(app)
+# add Flask RESTfull api
+api = Api(app)
 
 
 # configuration
@@ -26,23 +34,52 @@ jwt_timedelta = 1
 # database name
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///service_auth.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
+
+
 # creates SQLALCHEMY object
 db = SQLAlchemy(app)
+
+# Make the DeclarativeMeta
+Base = declarative_base()
 
 
 # Database ORMs
 # Users and roles
 class User(db.Model):
+    __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     public_id = db.Column(db.String(50), unique=True)
     role = db.Column(db.String(50))
     name = db.Column(db.String(100))
-    email = db.Column(db.String(70), unique=True, )
+    email = db.Column(db.String(70), unique=True)
     password = db.Column(db.String(80))
 
 
+class Role(db.Model):
+    __tablename__ = 'roles'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50))
+
+
+association_table = db.Table(
+    "association",
+    db.Model.metadata,
+    db.Column("role_id", db.Integer, ForeignKey("roles.id")),
+    db.Column("user_id", db.Integer, ForeignKey("users.id")),
+)
+
+
+class HelloWorld(Resource):
+    def get(self):
+        return {'hello': 'world'}
+
+
+api.add_resource(HelloWorld, '/')
+
 # User Database Route
 # this route sends back list of users
+
+
 @app.route('/users', methods=['GET'])
 def list_users():
     # querying the database
