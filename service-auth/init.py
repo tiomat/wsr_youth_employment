@@ -1,5 +1,5 @@
 from app import db, Role
-# from sqlalchemy.orm import Session
+
 db.drop_all()
 db.create_all()
 

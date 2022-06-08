@@ -1,9 +1,7 @@
-from flask import Flask, request, jsonify, make_response
+from flask import Flask, jsonify, make_response, request
 from flask_marshmallow import Marshmallow
-from flask_restful import Resource, Api
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import ForeignKey
-from sqlalchemy.orm import declarative_base, session
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timedelta
 from jwcrypto import jwk
@@ -14,9 +12,6 @@ import uuid
 app = Flask(__name__)
 # add Marshmallow
 ma = Marshmallow(app)
-# add Flask RESTfull api
-api = Api(app)
-
 
 # configuration
 # NEVER HARDCODE YOUR CONFIGURATION IN YOUR CODE
@@ -39,116 +34,162 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = True
 # creates SQLALCHEMY object
 db = SQLAlchemy(app)
 
-# Make the DeclarativeMeta
-Base = declarative_base()
-
 
 # Database ORMs
-# Users and roles
-class User(db.Model):
-    __tablename__ = 'users'
-    id = db.Column(db.Integer, primary_key=True)
-    public_id = db.Column(db.String(50), unique=True)
-    role = db.Column(db.String(50))
-    name = db.Column(db.String(100))
-    email = db.Column(db.String(70), unique=True)
-    password = db.Column(db.String(80))
 
-
-class Role(db.Model):
-    __tablename__ = 'roles'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50))
-
-
-association_table = db.Table(
-    "association",
+# Many Users to Many Roles
+user_to_roles_association = db.Table(
+    "users_to_roles",
     db.Model.metadata,
     db.Column("role_id", db.Integer, ForeignKey("roles.id")),
     db.Column("user_id", db.Integer, ForeignKey("users.id")),
 )
 
 
-class HelloWorld(Resource):
-    def get(self):
-        return {'hello': 'world'}
+# Users
+class User(db.Model):
+    __tablename__ = 'users'
+    id = db.Column(db.Integer, primary_key=True)
+    public_id = db.Column(db.String(50), unique=True)
+    # role = db.Column(db.String(50))
+    roles = db.relationship("Role", secondary=user_to_roles_association)
+    name = db.Column(db.String(100))
+    email = db.Column(db.String(70), unique=True)
+    password = db.Column(db.String(80))
 
 
-api.add_resource(HelloWorld, '/')
+# Roles
+class Role(db.Model):
+    __tablename__ = 'roles'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50))
 
-# User Database Route
-# this route sends back list of users
+# Role Schema
 
 
-@app.route('/users', methods=['GET'])
-def list_users():
-    # querying the database
-    # for all the entries in it
-    users = User.query.all()
-    # converting the query objects
-    # to list of jsons
-    output = []
-    for user in users:
-        # appending the user data json
-        # to the response list
-        output.append({
-            'id': user.id,
-            'public_id': user.public_id,
-            'name': user.name,
-            'email': user.email,
-            'role': user.role
-        })
+class RoleSchema(ma.Schema):
+    class Meta:
+        model: Role
+        fields = ("id", "name")
 
-    return jsonify({'users': output})
+
+# Role Schema Mapping
+role_schema = RoleSchema()
+roles_schema = RoleSchema(many=True)
+
+
+# User Schema
+class UserSchema(ma.Schema):
+    roles = ma.Nested(RoleSchema, many=True)
+
+    class Meta:
+        model = User
+        # Fields to expose
+        fields = ("id", "public_id", "name", "email", "roles", "_links")
+
+
+# User Schema Mapping
+user_schema = UserSchema()
+users_schema = UserSchema(many=True)
+
+
+# Response template
+def custom_reponse(data, status=200, always_ok=True):
+    if always_ok:
+        http_status = 200
+    else:
+        http_status = status
+
+    return make_response(
+        jsonify({
+                "status": status,
+                "data": data
+                }),
+        http_status)
+
+
+# Routes
+
+# Users
+# GET – get all users
+# POST – create new user
+@ app.route("/users/", methods=["GET", "POST"])
+def users():
+    all_users = User.query.all()
+    return custom_reponse(users_schema.dump(all_users))
+
+
+# GET – get user by id
+# PUT – update user by id
+@ app.route("/users/<id>", methods=["GET", "PUT"])
+def users_detail(id):
+    user = User.query.get(id)
+    if not user:
+        return custom_reponse("Not found", 404)
+    return custom_reponse(user_schema.dump(user))
+
+
+# Roles
+# GET – get all roles
+# POST – N/A
+@ app.route("/roles/", methods=["GET"])
+def roles():
+    all_users = Role.query.all()
+    return custom_reponse(roles_schema.dump(all_users))
+
+
+# GET – get role by id
+# PUT – N/A
+@ app.route("/roles/<id>")
+def roles_detail(id):
+    role = Role.query.get(id)
+    if not role:
+        return custom_reponse("Not found", 404)
+    return custom_reponse(role_schema.dump(role))
 
 
 # route for logging user in
-@app.route('/login', methods=['POST'])
+@ app.route('/login', methods=['POST'])
 def login():
     # creates dictionary of form data
     auth = request.form
-    print(auth)
+
     if not auth or not auth.get('email') or not auth.get('password'):
         # returns 401 if any email or / and password is missing
-        return make_response(
-            'Could not verify',
-            401,
-            {'WWW-Authenticate': 'Basic realm ="Login required !!"'}
-        )
+        return custom_reponse("Can't find required fileds: email or password", 400)
 
-    user = User.query\
-        .filter_by(email=auth.get('email'))\
-        .first()
-
+    user = User.query.filter_by(email=auth.get('email')).first()
+    # user = User.query\
+    #     .filter_by(email=auth.get('email'))\
+    #     .first()
+    print(user)
     if not user:
         # returns 401 if user does not exist
-        return make_response(
-            'Could not verify',
-            401,
-            {'WWW-Authenticate': 'Basic realm ="User does not exist !!"'}
-        )
+        return custom_reponse("Could not verify", 401)
 
     if check_password_hash(user.password, auth.get('password')):
 
         exp = datetime.now() + timedelta(hours=jwt_timedelta)
         exp = exp.timestamp()
 
+        # Map roles to list
+        user_roles = roles_schema.dump(user.roles)
+        list_roles = []
+        for el in user_roles:
+            list_roles.append(el["name"])
+
         token = {
             'id': user.id,
             'public_id': user.public_id,
-            'role': [user.role],
+            'roles': list_roles,
             'exp': exp
         }
 
         print(token)
-        return make_response(jsonify({'access_token': token}), 201)
+        return make_response(jsonify({'access_token': token, "exp": exp}), 200)
 
     # returns 403 if password is wrong
-    return make_response(
-        'Could not verify',
-        403,
-        {'WWW-Authenticate': 'Basic realm ="Wrong Password !!"'}
-    )
+    return custom_reponse("Could not verify", 401)
 
 
 # signup route
@@ -160,29 +201,34 @@ def signup():
     # gets name, email and password
     name, email = data.get('name'), data.get('email')
     password = data.get('password')
-    role = data.get('role', default='user')
+    role_name = data.get('role', default='user')
 
     # checking for existing user
-    user = User.query\
-        .filter_by(email=email)\
-        .first()
+    user = User.query.filter_by(email=email).first()
+    role = Role.query.filter_by(name=role_name).first()
+
+    if not role:
+        role = Role.query.get(name='user')
+
     if not user:
         # database ORM object
         user = User(
             public_id=str(uuid.uuid4()),
             name=name,
             email=email,
-            role=role,
             password=generate_password_hash(password)
         )
         # insert user
+
+        user.roles.append(role)
+
         db.session.add(user)
         db.session.commit()
 
-        return jsonify({"status": "Created"})
+        return custom_reponse("Created")
     else:
         # returns 202 if user already exists
-        return jsonify({"status": "Already exist. Please login"})
+        return custom_reponse("User already exist")
 
 
 @app.route('/jwt', methods=['GET'])
